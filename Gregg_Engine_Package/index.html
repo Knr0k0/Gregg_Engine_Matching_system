@@ -1,0 +1,346 @@
+<!--
+============================================================================
+GREGG SHORTHAND ENGINE - COMPLETE DEMO
+============================================================================
+
+PURPOSE:
+Interactive demo of the Gregg Shorthand rendering engine.
+Shows context-aware, human-like rendering of 15,832 Pre-Anniversary words.
+
+FEATURES:
+1. Full dictionary lookup (15,832 words)
+2. Context-aware stroke rendering (head/tail variants)
+3. Multi-character token parsing (CH, NG, A&', etc.)
+4. Animated stroke drawing (sequential, shows direction)
+5. Pure client-side JavaScript (no backend needed)
+
+TECHNICAL STACK:
+- dictionary_full.js: 15,832 word dictionary
+- paths.js: SVG path definitions with variants
+- gregg.js: Context-aware stroke logic
+- char.js: Character rendering and positioning
+- point.js: 2D vector operations
+- renderer.js: High-level rendering API
+
+============================================================================
+-->
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gregg Shorthand Engine - Context-Aware Rendering</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.2);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 10px;
+        }
+        .subtitle {
+            text-align: center;
+            color: #666;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        .input-section {
+            margin-bottom: 30px;
+        }
+        label {
+            display: block;
+            margin-bottom: 10px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="text"] {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+            box-sizing: border-box;
+        }
+        input[type="text"]:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+        button {
+            padding: 12px 24px;
+            background: #667eea;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            flex: 1;
+        }
+        button:hover {
+            background: #5568d3;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .output-section {
+            margin-top: 30px;
+        }
+        .info-box {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+            border-left: 4px solid #667eea;
+        }
+        .info-box p {
+            margin: 5px 0;
+            color: #555;
+        }
+        .info-box strong {
+            color: #333;
+        }
+        #svgOutput {
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            min-height: 300px;
+            background: white;
+            overflow: auto;
+            padding: 20px;
+        }
+        svg {
+            display: block;
+            margin: 20px auto;
+            min-width: 400px;
+            min-height: 150px;
+        }
+        svg path {
+            fill: none;
+            stroke: black;
+            stroke-linecap: round;
+            stroke-linejoin: round;
+        }
+        .animated path {
+            fill: none;
+        }
+        @keyframes draw {
+            from { stroke-dashoffset: var(--path-length); }
+            to { stroke-dashoffset: 0; }
+        }
+        .feature-list {
+            background: #e8f5e9;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            border-left: 4px solid #4caf50;
+        }
+        .feature-list h3 {
+            margin-top: 0;
+            color: #2e7d32;
+        }
+        .feature-list ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .feature-list li {
+            color: #555;
+            margin: 5px 0;
+        }
+        .error {
+            background: #ffebee;
+            border-left-color: #f44336;
+            color: #c62828;
+        }
+        .mode-selector {
+            margin-top: 15px;
+        }
+        .mode-selector label {
+            display: inline;
+            margin-right: 20px;
+            font-weight: normal;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Complete Gregg Shorthand Engine</h1>
+        <div class="subtitle">
+            Full Dictionary (15,832 words) • Alphabet Support • Sentence Parsing • Direct Grascii Input
+        </div>
+
+        <div class="input-section">
+            <label for="englishInput">Enter Text (word, sentence, or direct Grascii notation):</label>
+            <input type="text" id="englishInput" placeholder="e.g., hello world, BAKN (Grascii), or single letters" value="hello world">
+
+            <div class="button-group">
+                <button onclick="convertAndRender()">Convert & Render</button>
+                <button onclick="convertAndRenderAnimated()">Convert & Animate</button>
+            </div>
+            
+            <div class="mode-selector">
+                <label>
+                    <input type="radio" name="inputMode" value="auto" checked> Auto-detect
+                </label>
+                <label>
+                    <input type="radio" name="inputMode" value="english"> English Only
+                </label>
+                <label>
+                    <input type="radio" name="inputMode" value="grascii"> Direct Grascii
+                </label>
+            </div>
+        </div>
+
+        <div class="feature-list">
+            <h3>✨ Features</h3>
+            <ul>
+                <li><strong>Full Dictionary:</strong> 15,832 Pre-Anniversary Edition words</li>
+                <li><strong>Alphabet Support:</strong> Single letters A-Z render as individual strokes</li>
+                <li><strong>Sentence Parsing:</strong> Enter multiple words separated by spaces</li>
+                <li><strong>Direct Grascii:</strong> Type notation directly (e.g., BAKN for "bacon")</li>
+                <li><strong>Fallback Mode:</strong> Unknown words render letter-by-letter</li>
+                <li><strong>Animated Drawing:</strong> Shows correct stroke direction</li>
+            </ul>
+        </div>
+
+        <div class="output-section">
+            <div id="infoBox" class="info-box" style="display: none;">
+                <p><strong>Input:</strong> <span id="englishWord"></span></p>
+                <p><strong>Mode:</strong> <span id="inputMode"></span></p>
+                <p><strong>English Word(s):</strong> <span id="englishMeaning"></span></p>
+                <p><strong>Grascii Notation:</strong> <span id="grasciiNotation"></span></p>
+                <p><strong>Stroke Count:</strong> <span id="strokeCount"></span></p>
+            </div>
+
+            <div id="errorBox" class="info-box error" style="display: none;">
+                <p id="errorMessage"></p>
+            </div>
+
+            <div id="svgOutput"></div>
+        </div>
+    </div>
+
+    <!-- Load Gregg Engine dependencies in correct order -->
+    <script src="javascript_engine/dictionary_full.js"></script>
+    <script src="javascript_engine/point.js"></script>
+    <script src="javascript_engine/paths.js"></script>
+    <script src="javascript_engine/char.js"></script>
+    <script src="javascript_engine/gregg.js"></script>
+    <script src="javascript_engine/renderer.js"></script>
+
+    <script>
+        // ============================================================================
+        // UI FUNCTIONS (uses GreggRenderer module)
+        // ============================================================================
+        
+        function convertAndRender() {
+            renderInput(false);
+        }
+
+        function convertAndRenderAnimated() {
+            renderInput(true);
+        }
+
+        function getInputMode() {
+            const selected = document.querySelector('input[name="inputMode"]:checked');
+            return selected ? selected.value : 'auto';
+        }
+
+        function renderInput(animated) {
+            const rawInput = document.getElementById('englishInput').value.trim();
+            const inputMode = getInputMode();
+
+            if (!rawInput) {
+                showError('Please enter some text');
+                return;
+            }
+
+            try {
+                let result;
+                let detectedMode = inputMode;
+
+                if (inputMode === 'grascii') {
+                    result = renderDirectGrascii(rawInput);
+                    detectedMode = 'Direct Grascii';
+                } else if (inputMode === 'english') {
+                    result = renderEnglishText(rawInput);
+                    detectedMode = 'English';
+                } else {
+                    // Auto-detect mode
+                    if (looksLikeGrascii(rawInput)) {
+                        result = renderDirectGrascii(rawInput);
+                        detectedMode = 'Auto-detected: Grascii';
+                    } else {
+                        result = renderEnglishText(rawInput);
+                        detectedMode = 'Auto-detected: English';
+                    }
+                }
+
+                // Display info
+                document.getElementById('englishWord').textContent = rawInput;
+                document.getElementById('inputMode').textContent = detectedMode;
+                document.getElementById('englishMeaning').textContent = result.english || rawInput;
+                document.getElementById('grasciiNotation').textContent = result.notation;
+                document.getElementById('strokeCount').textContent = result.strokeCount + ' strokes';
+                document.getElementById('infoBox').style.display = 'block';
+                document.getElementById('errorBox').style.display = 'none';
+
+                // Create and display SVG
+                displaySVG(result.chars, animated);
+
+            } catch (error) {
+                showError(`Rendering error: ${error.message}`);
+                console.error(error);
+            }
+        }
+
+        function displaySVG(chars, animated) {
+            const svg = createSVGFromChars(chars, animated);
+            
+            const outputDiv = document.getElementById('svgOutput');
+            outputDiv.innerHTML = '';
+            outputDiv.appendChild(svg);
+
+            if (animated) {
+                setTimeout(() => animateStrokes(svg), 10);
+            }
+        }
+
+        function showError(message) {
+            document.getElementById('errorMessage').textContent = message;
+            document.getElementById('errorBox').style.display = 'block';
+            document.getElementById('infoBox').style.display = 'none';
+            document.getElementById('svgOutput').innerHTML = '';
+        }
+
+        // ============================================================================
+        // EVENT LISTENERS
+        // ============================================================================
+
+        window.addEventListener('load', () => {
+            convertAndRender();
+        });
+
+        document.getElementById('englishInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                convertAndRender();
+            }
+        });
+    </script>
+</body>
+</html>
