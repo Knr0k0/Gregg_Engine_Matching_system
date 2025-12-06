@@ -81,6 +81,7 @@ TECHNICAL STACK:
             display: flex;
             gap: 10px;
             margin-top: 15px;
+            flex-wrap: wrap;
         }
         button {
             padding: 12px 24px;
@@ -91,6 +92,7 @@ TECHNICAL STACK:
             cursor: pointer;
             font-size: 16px;
             flex: 1;
+            min-width: 150px;
         }
         button:hover {
             background: #5568d3;
@@ -98,6 +100,15 @@ TECHNICAL STACK:
         button:disabled {
             background: #ccc;
             cursor: not-allowed;
+        }
+        .export-button {
+            background: #4caf50;
+        }
+        .export-button:hover {
+            background: #45a049;
+        }
+        .export-button:disabled {
+            background: #ccc;
         }
         .output-section {
             margin-top: 30px;
@@ -191,6 +202,11 @@ TECHNICAL STACK:
             <div class="button-group">
                 <button onclick="convertAndRender()">Convert & Render</button>
                 <button onclick="convertAndRenderAnimated()">Convert & Animate</button>
+                <button class="export-button" onclick="downloadAllPNG()" id="downloadAllBtn" disabled>Download All as PNG (Batch)</button>
+                <button class="export-button" onclick="clearBatch()" id="clearBtn" disabled>Clear Batch</button>
+            </div>
+            <div id="batchStatus" style="margin-top: 10px; font-size: 14px; color: #667eea; display: none;">
+                <strong>Batch Progress:</strong> <span id="batchCount">0</span> images ready
             </div>
             
             <div class="mode-selector">
@@ -242,6 +258,10 @@ TECHNICAL STACK:
     <script src="javascript_engine/char.js"></script>
     <script src="javascript_engine/gregg.js"></script>
     <script src="javascript_engine/renderer.js"></script>
+
+    <!-- Image export libraries -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
 
     <script>
         // ============================================================================
@@ -309,6 +329,12 @@ TECHNICAL STACK:
             }
         }
 
+        // ============================================================================
+        // BATCH IMAGE STORAGE
+        // ============================================================================
+        let pngBatch = {};  // Store { filename: blob }
+        let currentFilename = '';
+
         function displaySVG(chars, animated) {
             const svg = createSVGFromChars(chars, animated);
             
@@ -316,8 +342,125 @@ TECHNICAL STACK:
             outputDiv.innerHTML = '';
             outputDiv.appendChild(svg);
 
+            // Auto-convert to PNG in background
+            convertSVGToPNGBackground(svg);
+
             if (animated) {
                 setTimeout(() => animateStrokes(svg), 10);
+            }
+        }
+
+        // ============================================================================
+        // IMAGE EXPORT FUNCTIONS
+        // ============================================================================
+
+        function getFilename() {
+            const input = document.getElementById('englishInput').value.trim();
+            return input.replace(/[^a-z0-9]/gi, '_').toLowerCase() || 'gregg_shorthand';
+        }
+
+        function convertSVGToPNGBackground(svg) {
+            currentFilename = getFilename();
+
+            // Convert to PNG in background (non-blocking)
+            html2canvas(svg, {
+                backgroundColor: '#ffffff',
+                scale: 2,
+                logging: false,
+                useCORS: true
+            }).then(canvas => {
+                canvas.toBlob(blob => {
+                    // Store in batch with timestamp to avoid duplicates
+                    const timestamp = Date.now();
+                    const filename = currentFilename + '_' + timestamp + '.png';
+                    pngBatch[filename] = blob;
+
+                    // Update UI
+                    updateBatchStatus();
+                });
+            }).catch(error => {
+                console.error('Background PNG conversion failed:', error);
+            });
+        }
+
+        function updateBatchStatus() {
+            const count = Object.keys(pngBatch).length;
+            const statusDiv = document.getElementById('batchStatus');
+            const batchCountSpan = document.getElementById('batchCount');
+            
+            if (count > 0) {
+                statusDiv.style.display = 'block';
+                batchCountSpan.textContent = count;
+                document.getElementById('downloadAllBtn').disabled = false;
+                document.getElementById('clearBtn').disabled = false;
+            } else {
+                statusDiv.style.display = 'none';
+                document.getElementById('downloadAllBtn').disabled = true;
+                document.getElementById('clearBtn').disabled = true;
+            }
+        }
+
+        function downloadAllPNG() {
+            const count = Object.keys(pngBatch).length;
+            if (count === 0) {
+                alert('No PNG images in batch. Please render some text first.');
+                return;
+            }
+
+            if (count === 1) {
+                // Single image - download directly
+                const filename = Object.keys(pngBatch)[0];
+                const blob = pngBatch[filename];
+                const url = URL.createObjectURL(blob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = filename;
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+            } else {
+                // Multiple images - create ZIP
+                downloadAllAsZIP();
+            }
+        }
+
+        function downloadAllAsZIP() {
+            const downloadBtn = document.getElementById('downloadAllBtn');
+            downloadBtn.disabled = true;
+            downloadBtn.textContent = 'Creating ZIP...';
+
+            const zip = new JSZip();
+            
+            // Add all PNG images to ZIP
+            for (const [filename, blob] of Object.entries(pngBatch)) {
+                zip.file(filename, blob);
+            }
+
+            // Generate ZIP and download
+            zip.generateAsync({ type: 'blob' }).then(zipBlob => {
+                const url = URL.createObjectURL(zipBlob);
+                const link = document.createElement('a');
+                link.href = url;
+                link.download = 'gregg_shorthand_batch_' + Date.now() + '.zip';
+                document.body.appendChild(link);
+                link.click();
+                document.body.removeChild(link);
+                URL.revokeObjectURL(url);
+
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download All as PNG (Batch)';
+            }).catch(error => {
+                alert('Error creating ZIP: ' + error.message);
+                downloadBtn.disabled = false;
+                downloadBtn.textContent = 'Download All as PNG (Batch)';
+            });
+        }
+
+        function clearBatch() {
+            if (confirm('Clear all ' + Object.keys(pngBatch).length + ' PNG images from batch?')) {
+                pngBatch = {};
+                updateBatchStatus();
             }
         }
 
